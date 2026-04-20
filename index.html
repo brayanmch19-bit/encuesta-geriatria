@@ -240,37 +240,21 @@ const allResponses = [];
 let cur = 0;
  
 // ═══ LOAD SAVED DATA on page open ═══
+// Google Sheets es la ÚNICA fuente de datos.
+// Si se borra el Google Sheet, la página también se ve vacía.
 async function loadSavedData() {
-  // 1. Try Google Sheets
-  if (GOOGLE_SCRIPT_URL) {
-    try {
-      document.getElementById('stT').textContent = '...';
-      const resp = await fetch(GOOGLE_SCRIPT_URL);
-      const json = await resp.json();
-      if (json.result === 'ok' && json.data && json.data.length > 0) {
-        json.data.forEach(row => {
-          allResponses.push(row);
-          const dept = row['Departamento'];
-          const hospital = row['Hospital'];
-          const sub = row['Subsector'] || '';
-          const denom = row['Denominación'] || '';
-          if (dept && data[dept]) {
-            data[dept].push({ hospital, sub, denom, _new: false });
-          }
-        });
-        updateStats();
-        buildGrid();
-        return;
-      }
-    } catch(e) { console.log('Google Sheets no disponible, usando localStorage:', e); }
-  }
+  if (!GOOGLE_SCRIPT_URL) return;
   
-  // 2. Fallback: localStorage
   try {
-    const saved = localStorage.getItem('encuestas_geriatria_peru');
-    if (saved) {
-      const parsed = JSON.parse(saved);
-      parsed.forEach(row => {
+    document.getElementById('stT').textContent = '...';
+    const resp = await fetch(GOOGLE_SCRIPT_URL + '?t=' + Date.now(), { cache: 'no-store' });
+    const json = await resp.json();
+    
+    // Limpiar siempre el localStorage para que nunca muestre datos viejos
+    try { localStorage.removeItem('encuestas_geriatria_peru'); } catch(e) {}
+    
+    if (json.result === 'ok' && json.data && json.data.length > 0) {
+      json.data.forEach(row => {
         allResponses.push(row);
         const dept = row['Departamento'];
         const hospital = row['Hospital'];
@@ -280,17 +264,22 @@ async function loadSavedData() {
           data[dept].push({ hospital, sub, denom, _new: false });
         }
       });
-      updateStats();
-      buildGrid();
     }
-  } catch(e) { console.log('localStorage error:', e); }
+    
+    updateStats();
+    buildGrid();
+  } catch(e) {
+    console.log('Error conectando con Google Sheets:', e);
+    // Si falla la conexión, mostrar vacío en vez de datos locales viejos
+    updateStats();
+    buildGrid();
+  }
 }
  
-// ═══ SAVE to localStorage (backup) ═══
+// ═══ SAVE to localStorage (backup temporal de la sesión actual) ═══
 function saveToLocal() {
-  try {
-    localStorage.setItem('encuestas_geriatria_peru', JSON.stringify(allResponses));
-  } catch(e) {}
+  // Ya no usamos localStorage como respaldo de datos antiguos.
+  // Solo el Google Sheet es la fuente de verdad.
 }
  
 // ═══ SEND to Google Sheets ═══
@@ -535,4 +524,3 @@ document.addEventListener('keydown', function(e) {
 </script>
 </body>
 </html>
- 
